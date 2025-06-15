@@ -57,7 +57,7 @@
             messageDiv.textContent = '';
             messageDiv.className = 'message';
 
-            try {
+          
                 // Panggil API Register
                 const response = await fetch('http://localhost:8080/api/auth/signup', {
                     method: 'POST',
@@ -78,11 +78,6 @@
                     messageDiv.className = 'message error';
                     messageDiv.textContent = data.message || 'Registrasi gagal. Coba lagi.';
                 }
-            } catch (error) {
-                console.error('Error during registration:', error);
-                messageDiv.className = 'message error';
-                messageDiv.textContent = 'Terjadi kesalahan jaringan atau server.';
-            }
         });
     </script>
 </body>
