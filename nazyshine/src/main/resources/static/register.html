@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daftar - Nazyshine Salon</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f7f6; display: flex; justify-content: center; align-items: center; min-height: 90vh; }
+        .container { background-color: #ffffff; max-width: 400px; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
+        h2 { text-align: center; color: #333; margin-bottom: 25px; }
+        label { display: block; margin-bottom: 8px; color: #555; font-weight: bold; }
+        input[type="text"], input[type="email"], input[type="password"], select { width: calc(100% - 22px); padding: 12px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
+        button { width: 100%; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 18px; font-weight: bold; transition: background-color 0.3s ease; }
+        button:hover { background-color: #218838; }
+        .message { margin-top: 15px; padding: 12px; border-radius: 5px; text-align: center; font-size: 15px; }
+        .message.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .message.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        p { text-align: center; margin-top: 20px; color: #666; }
+        p a { color: #007bff; text-decoration: none; font-weight: bold; }
+        p a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Daftar Akun Nazyshine Salon</h2>
+        <form id="registerForm">
+            <label for="regUsername">Username:</label>
+            <input type="text" id="regUsername" name="username" required><br>
+
+            <label for="regEmail">Email:</label>
+            <input type="email" id="regEmail" name="email" required><br>
+
+            <label for="regPassword">Password:</label>
+            <input type="password" id="regPassword" name="password" required><br>
+
+            <label for="role">Daftar sebagai:</label>
+            <select id="role" name="role">
+                <option value="user">user</option>
+                <option value="admin">admin</option>
+                </select><br><br>
+
+            <button type="submit">Daftar</button>
+        </form>
+        <div id="message" class="message"></div>
+        <p>Sudah punya akun? <a href="login.html">Login di sini</a>.</p>
+    </div>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const role = [document.getElementById('role').value]; // Kirim sebagai array
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = '';
+            messageDiv.className = 'message';
+
+            try {
+                // Panggil API Register
+                const response = await fetch('http://localhost:8080/api/auth/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, email, password, role })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    messageDiv.className = 'message success';
+                    messageDiv.textContent = data.message || 'Registrasi berhasil! Silakan login.';
+                    // Opsional: kosongkan form setelah sukses
+                    document.getElementById('registerForm').reset();
+                } else {
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = data.message || 'Registrasi gagal. Coba lagi.';
+                }
+            } catch (error) {
+                console.error('Error during registration:', error);
+                messageDiv.className = 'message error';
+                messageDiv.textContent = 'Terjadi kesalahan jaringan atau server.';
+            }
+        });
+    </script>
+</body>
+</html>

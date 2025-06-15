@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Nazyshine Salon</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f7f6; }
+        .container { background-color: #ffffff; max-width: 960px; margin: auto; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); margin-bottom: 20px; }
+        h1, h2, h3 { text-align: center; color: #333; margin-bottom: 20px; }
+        nav { text-align: center; margin-bottom: 25px; }
+        nav button { padding: 12px 20px; margin: 0 10px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 5px; font-size: 16px; transition: background-color 0.3s ease; }
+        nav button:hover { background-color: #5a6268; }
+        form label { display: block; margin-bottom: 8px; color: #555; font-weight: bold; }
+        form input[type="text"], form input[type="number"], form textarea { width: calc(100% - 22px); padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 5px; font-size: 15px; }
+        form button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background-color 0.3s ease; }
+        form button.delete-btn { background-color: #dc3545; }
+        form button:hover { background-color: #0056b3; }
+        form button.delete-btn:hover { background-color: #c82333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 25px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 15px; }
+        th { background-color: #f2f2f2; color: #333; }
+        .action-buttons button { margin-right: 8px; padding: 8px 12px; cursor: pointer; border-radius: 4px; font-size: 14px; transition: background-color 0.3s ease; }
+        .edit-btn { background-color: #ffc107; color: black; border: none; }
+        .edit-btn:hover { background-color: #e0a800; }
+        .delete-btn { background-color: #dc3545; color: white; border: none; }
+        .delete-btn:hover { background-color: #c82333; }
+        .logout-btn { background-color: #6c757d; color: white; border: none; float: right; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background-color 0.3s ease; }
+        .logout-btn:hover { background-color: #5a6268; }
+        .message { margin-top: 15px; padding: 12px; border-radius: 5px; text-align: center; font-size: 15px; }
+        .message.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .message.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Dashboard</h1>
+        <button id="logoutBtn" class="logout-btn">Logout</button>
+        <nav>
+            <button id="showServiceCrud">Kelola Layanan</button>
+            <button id="showBookings">Lihat Semua Booking</button>
+        </nav>
+
+        <div id="serviceCrudSection">
+            <h2>Kelola Layanan Salon</h2>
+            <form id="serviceForm">
+                <input type="hidden" id="serviceId">
+                <label for="serviceName">Nama Layanan:</label>
+                <input type="text" id="serviceName" required><br>
+
+                <label for="servicePrice">Harga:</label>
+                <input type="number" id="servicePrice" step="0.01" required><br>
+
+                <label for="serviceDescription">Deskripsi:</label>
+                <textarea id="serviceDescription"></textarea><br>
+
+                <button type="submit" id="saveServiceBtn">Tambah Layanan</button>
+                <button type="button" id="cancelEditBtn" style="display: none;">Batal Edit</button>
+            </form>
+            <div id="serviceMessage" class="message"></div>
+
+            <h3>Daftar Layanan</h3>
+            <table id="servicesTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nama</th>
+                        <th>Harga</th>
+                        <th>Deskripsi</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+        </div>
+
+        <div id="bookingsSection" style="display: none;">
+            <h2>Semua Booking</h2>
+            <div id="bookingMessage" class="message"></div>
+            <table id="bookingsTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>User</th>
+                        <th>Layanan</th>
+                        <th>Waktu Booking</th>
+                        <th>Total Harga</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8080/api';
+        const jwtToken = localStorage.getItem('jwtToken');
+        const userRoles = JSON.parse(localStorage.getItem('userRoles'));
+
+        // Proteksi Halaman: Redirect jika tidak ada token atau bukan admin
+        if (!jwtToken || !userRoles || !userRoles.includes('ROLE_ADMIN')) {
+            alert('Anda tidak memiliki akses ke halaman ini. Silakan login sebagai admin.');
+            window.location.href = 'login.html';
+        }
+
+        const serviceCrudSection = document.getElementById('serviceCrudSection');
+        const bookingsSection = document.getElementById('bookingsSection');
+        const serviceForm = document.getElementById('serviceForm');
+        const serviceMessageDiv = document.getElementById('serviceMessage');
+        const bookingMessageDiv = document.getElementById('bookingMessage');
+        const servicesTableBody = document.querySelector('#servicesTable tbody');
+        const bookingsTableBody = document.querySelector('#bookingsTable tbody');
+        const saveServiceBtn = document.getElementById('saveServiceBtn');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+        // Fungsi Helper untuk Request API
+        async function callApi(url, method = 'GET', body = null) {
+            const headers = {
+                'Authorization': `Bearer ${jwtToken}`,
+                'Content-Type': 'application/json'
+            };
+            const options = { method, headers };
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                // Coba parse error message dari response body jika ada
+                let errorMessage = `API call failed with status ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || errorMessage;
+                } catch (jsonError) {
+                    // Jika response body bukan JSON, gunakan status saja
+                    console.error('Error parsing API response:', jsonError);
+                }
+                throw new Error(errorMessage);
+            }
+            return response.json();
+        }
+
+        // --- Manajemen Layanan (CRUD) ---
+        async function fetchServices() {
+            try {
+                const services = await callApi(`${API_BASE_URL}/admin/services`);
+                servicesTableBody.innerHTML = '';
+                services.forEach(service => {
+                    const row = servicesTableBody.insertRow();
+                    row.insertCell().textContent = service.id;
+                    row.insertCell().textContent = service.name;
+                    row.insertCell().textContent = `Rp ${parseFloat(service.price).toLocaleString('id-ID')}`;
+                    row.insertCell().textContent = service.description;
+                    const actionCell = row.insertCell();
+                    actionCell.innerHTML = `
+                        <button class="edit-btn" data-id="${service.id}" data-name="${service.name}" data-price="${service.price}" data-description="${service.description || ''}">Edit</button>
+                        <button class="delete-btn" data-id="${service.id}">Hapus</button>
+                    `;
+                });
+            } catch (error) {
+                serviceMessageDiv.className = 'message error';
+                serviceMessageDiv.textContent = `Gagal memuat layanan: ${error.message}`;
+                console.error('Error fetching services:', error);
+            }
+        }
+
+        serviceForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const serviceId = document.getElementById('serviceId').value;
+            const name = document.getElementById('serviceName').value;
+            const price = parseFloat(document.getElementById('servicePrice').value);
+            const description = document.getElementById('serviceDescription').value;
+
+            const serviceData = { name, price, description };
+            let url = `${API_BASE_URL}/admin/services`;
+            let method = 'POST';
+
+            if (serviceId) {
+                url += `/${serviceId}`;
+                method = 'PUT';
+            }
+
+            try {
+                const result = await callApi(url, method, serviceData);
+                serviceMessageDiv.className = 'message success';
+                serviceMessageDiv.textContent = result.message;
+                serviceForm.reset();
+                document.getElementById('serviceId').value = ''; // Clear ID for next creation
+                saveServiceBtn.textContent = 'Tambah Layanan';
+                cancelEditBtn.style.display = 'none';
+                fetchServices(); // Reload list
+            } catch (error) {
+                serviceMessageDiv.className = 'message error';
+                serviceMessageDiv.textContent = `Gagal menyimpan layanan: ${error.message}`;
+                console.error('Error saving service:', error);
+            }
+        });
+
+        servicesTableBody.addEventListener('click', async (event) => {
+            if (event.target.classList.contains('edit-btn')) {
+                const btn = event.target;
+                document.getElementById('serviceId').value = btn.dataset.id;
+                document.getElementById('serviceName').value = btn.dataset.name;
+                document.getElementById('servicePrice').value = btn.dataset.price;
+                document.getElementById('serviceDescription').value = btn.dataset.description;
+                saveServiceBtn.textContent = 'Update Layanan';
+                cancelEditBtn.style.display = 'inline-block';
+            } else if (event.target.classList.contains('delete-btn')) {
+                const serviceId = event.target.dataset.id;
+                if (confirm(`Yakin ingin menghapus layanan dengan ID ${serviceId}?`)) {
+                    try {
+                        const result = await callApi(`${API_BASE_URL}/admin/services/${serviceId}`, 'DELETE');
+                        serviceMessageDiv.className = 'message success';
+                        serviceMessageDiv.textContent = result.message;
+                        fetchServices(); // Reload list
+                    } catch (error) {
+                        serviceMessageDiv.className = 'message error';
+                        serviceMessageDiv.textContent = `Gagal menghapus layanan: ${error.message}`;
+                        console.error('Error deleting service:', error);
+                    }
+                }
+            }
+        });
+
+        cancelEditBtn.addEventListener('click', () => {
+            serviceForm.reset();
+            document.getElementById('serviceId').value = '';
+            saveServiceBtn.textContent = 'Tambah Layanan';
+            cancelEditBtn.style.display = 'none';
+        });
+
+        // --- Manajemen Booking (Admin) ---
+        async function fetchAllBookings() {
+            try {
+                const bookings = await callApi(`${API_BASE_URL}/admin/bookings`);
+                bookingsTableBody.innerHTML = '';
+                bookings.forEach(booking => {
+                    const row = bookingsTableBody.insertRow();
+                    row.insertCell().textContent = booking.id;
+                    row.insertCell().textContent = booking.user.username;
+                    row.insertCell().textContent = booking.services.map(s => s.name).join(', ');
+                    row.insertCell().textContent = new Date(booking.bookingTime).toLocaleString('id-ID');
+                    row.insertCell().textContent = `Rp ${parseFloat(booking.totalPrice).toLocaleString('id-ID')}`;
+                    row.insertCell().textContent = booking.status;
+                    const actionCell = row.insertCell();
+                    actionCell.innerHTML = `
+                        <select class="status-select" data-id="${booking.id}">
+                            <option value="PENDING" ${booking.status === 'PENDING' ? 'selected' : ''}>PENDING</option>
+                            <option value="CONFIRMED" ${booking.status === 'CONFIRMED' ? 'selected' : ''}>CONFIRMED</option>
+                            <option value="CANCELED" ${booking.status === 'CANCELED' ? 'selected' : ''}>CANCELED</option>
+                            <option value="COMPLETED" ${booking.status === 'COMPLETED' ? 'selected' : ''}>COMPLETED</option>
+                        </select>
+                        <button class="delete-booking-btn" data-id="${booking.id}">Hapus</button>
+                    `;
+                });
+            } catch (error) {
+                bookingMessageDiv.className = 'message error';
+                bookingMessageDiv.textContent = `Gagal memuat booking: ${error.message}`;
+                console.error('Error fetching bookings:', error);
+            }
+        }
+
+        bookingsTableBody.addEventListener('change', async (event) => {
+            if (event.target.classList.contains('status-select')) {
+                const bookingId = event.target.dataset.id;
+                const newStatus = event.target.value;
+                try {
+                    const result = await callApi(`${API_BASE_URL}/admin/bookings/${bookingId}/status?status=${newStatus}`, 'PUT');
+                    bookingMessageDiv.className = 'message success';
+                    bookingMessageDiv.textContent = result.message;
+                } catch (error) {
+                    bookingMessageDiv.className = 'message error';
+                    bookingMessageDiv.textContent = `Gagal memperbarui status: ${error.message}`;
+                    console.error('Error updating booking status:', error);
+                }
+            }
+        });
+
+        bookingsTableBody.addEventListener('click', async (event) => {
+            if (event.target.classList.contains('delete-booking-btn')) {
+                const bookingId = event.target.dataset.id;
+                if (confirm(`Yakin ingin menghapus booking dengan ID ${bookingId}?`)) {
+                    try {
+                        const result = await callApi(`${API_BASE_URL}/admin/bookings/${bookingId}`, 'DELETE');
+                        bookingMessageDiv.className = 'message success';
+                        bookingMessageDiv.textContent = result.message;
+                        fetchAllBookings(); // Reload list
+                    }
+                     catch (error) {
+                        bookingMessageDiv.className = 'message error';
+                        bookingMessageDiv.textContent = `Gagal menghapus booking: ${error.message}`;
+                        console.error('Error deleting booking:', error);
+                    }
+                }
+            }
+        });
+
+
+        // --- Navigasi dan Logout ---
+        document.getElementById('showServiceCrud').addEventListener('click', () => {
+            serviceCrudSection.style.display = 'block';
+            bookingsSection.style.display = 'none';
+            fetchServices(); // Muat ulang layanan saat ditampilkan
+        });
+
+        document.getElementById('showBookings').addEventListener('click', () => {
+            serviceCrudSection.style.display = 'none';
+            bookingsSection.style.display = 'block';
+            fetchAllBookings(); // Muat ulang booking saat ditampilkan
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('jwtToken');
+            localStorage.removeItem('userRoles');
+            window.location.href = 'login.html';
+        });
+
+        // Muat layanan saat halaman pertama kali dimuat
+        fetchServices();
+    </script>
+</body>
+</html>

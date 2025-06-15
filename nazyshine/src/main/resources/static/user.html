@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - Nazyshine Salon</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f7f6; }
+        .container { background-color: #ffffff; max-width: 960px; margin: auto; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); margin-bottom: 20px; }
+        h1, h2, h3 { text-align: center; color: #333; margin-bottom: 20px; }
+        nav { text-align: center; margin-bottom: 25px; }
+        nav button { padding: 12px 20px; margin: 0 10px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 5px; font-size: 16px; transition: background-color 0.3s ease; }
+        nav button:hover { background-color: #5a6268; }
+        .service-item { display: flex; align-items: center; margin-bottom: 10px; padding: 8px 0; border-bottom: 1px dashed #eee; }
+        .service-item:last-child { border-bottom: none; }
+        .service-item input[type="checkbox"] { margin-right: 12px; transform: scale(1.3); }
+        .total-price { font-size: 1.3em; font-weight: bold; margin-top: 20px; text-align: right; color: #007bff; }
+        #calculateTotalBtn { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 15px; display: block; margin-left: auto; margin-right: auto; }
+        #calculateTotalBtn:hover { background-color: #0056b3; }
+        #bookingForm input[type="datetime-local"] { width: calc(100% - 22px); padding: 12px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
+        #bookingForm button { padding: 12px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 18px; font-weight: bold; transition: background-color 0.3s ease; display: block; margin-left: auto; margin-right: auto; }
+        #bookingForm button:hover { background-color: #218838; }
+        table { width: 100%; border-collapse: collapse; margin-top: 25px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 15px; }
+        th { background-color: #f2f2f2; color: #333; }
+        .logout-btn { background-color: #6c757d; color: white; border: none; float: right; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background-color 0.3s ease; }
+        .logout-btn:hover { background-color: #5a6268; }
+        .message { margin-top: 15px; padding: 12px; border-radius: 5px; text-align: center; font-size: 15px; }
+        .message.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .message.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>User Dashboard</h1>
+        <button id="logoutBtn" class="logout-btn">Logout</button>
+        <nav>
+            <button id="showServices">Pesan Layanan</button>
+            <button id="showMyBookings">Booking Saya</button>
+        </nav>
+
+        <div id="servicesSection">
+            <h2>Pilih Layanan Salon</h2>
+            <div id="servicesList">
+                </div>
+            <div class="total-price">
+                Total Harga: <span id="displayedTotalPrice">Rp 0.00</span>
+            </div>
+            <button id="calculateTotalBtn">Hitung Ulang Total</button>
+            <div id="calculateMessage" class="message"></div>
+
+            <h3>Buat Booking</h3>
+            <form id="bookingForm">
+                <label for="bookingDateTime">Pilih Tanggal & Waktu Booking:</label>
+                <input type="datetime-local" id="bookingDateTime" required><br>
+                <button type="submit">Konfirmasi Booking</button>
+            </form>
+            <div id="bookingMessage" class="message"></div>
+        </div>
+
+        <div id="myBookingsSection" style="display: none;">
+            <h2>Booking Saya</h2>
+            <div id="myBookingMessage" class="message"></div>
+            <table id="myBookingsTable">
+                <thead>
+                    <tr>
+                        <th>ID Booking</th>
+                        <th>Waktu Booking</th>
+                        <th>Layanan</th>
+                        <th>Total Harga</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8080/api';
+        const jwtToken = localStorage.getItem('jwtToken');
+        const userRoles = JSON.parse(localStorage.getItem('userRoles'));
+
+        // Proteksi Halaman: Redirect jika tidak ada token atau bukan user/admin
+        if (!jwtToken || !userRoles || (!userRoles.includes('ROLE_USER') && !userRoles.includes('ROLE_ADMIN'))) {
+            alert('Anda tidak memiliki akses ke halaman ini. Silakan login.');
+            window.location.href = 'login.html';
+        }
+
+        const servicesSection = document.getElementById('servicesSection');
+        const myBookingsSection = document.getElementById('myBookingsSection');
+        const servicesListDiv = document.getElementById('servicesList');
+        const calculateMessageDiv = document.getElementById('calculateMessage');
+        const bookingMessageDiv = document.getElementById('bookingMessage');
+        const myBookingMessageDiv = document.getElementById('myBookingMessage');
+        const displayedTotalPriceSpan = document.getElementById('displayedTotalPrice');
+        const bookingForm = document.getElementById('bookingForm');
+        const myBookingsTableBody = document.querySelector('#myBookingsTable tbody');
+
+        // Fungsi Helper untuk Request API
+        async function callApi(url, method = 'GET', body = null) {
+            // Log token dan peran sebelum digunakan
+            console.log('Current JWT Token (from localStorage):', localStorage.getItem('jwtToken'));
+            console.log('Current User Roles (from localStorage):', localStorage.getItem('userRoles'));
+
+            const jwtToken = localStorage.getItem('jwtToken'); // Ambil ulang di sini
+            if (!jwtToken) {
+                console.error('JWT Token is missing in localStorage. Redirecting to login.');
+                alert('Sesi Anda telah berakhir atau token tidak ditemukan. Silakan login kembali.');
+                localStorage.removeItem('userRoles'); // Bersihkan jika token hilang
+                window.location.href = 'login.html';
+                throw new Error('No JWT token found'); // Menghentikan eksekusi
+            }
+
+            const headers = {
+                'Authorization': `Bearer ${jwtToken}`, // PENTING: Pastikan ini benar
+                'Content-Type': 'application/json'
+            };
+
+            // Log headers yang dikirim
+            console.log('Sending request to:', url, 'with method:', method);
+            console.log('Request Headers:', headers);
+            if (body) {
+                console.log('Request Body:', JSON.stringify(body));
+            }
+
+            const options = { method, headers };
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+
+            const response = await fetch(url, options);
+
+            // Log response status dan header
+            console.log('Response Status:', response.status);
+            console.log('Response Headers:', response.headers);
+
+            if (!response.ok) {
+                let errorMessage = `API call failed with status ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || errorMessage;
+                    console.error('API Error Response (JSON):', errorData);
+                } catch (jsonError) {
+                    console.error('Error parsing API response as JSON, trying as text:', jsonError);
+                    try {
+                        const textError = await response.text();
+                        console.error('API Error Response (Text):', textError);
+                        errorMessage = `API Error: ${response.status} - ${textError.substring(0, Math.min(textError.length, 200))}`;
+                    } catch (readTextError) {
+                        console.error('Failed to read response as text:', readTextError);
+                    }
+                }
+                throw new Error(errorMessage);
+            }
+            return response.json(); 
+        }
+
+        // --- Pilih Layanan & Hitung Total ---
+        async function fetchAndDisplayServices() {
+            try {
+                const services = await callApi(`${API_BASE_URL}/user/services`);
+                servicesListDiv.innerHTML = '';
+                services.forEach(service => {
+                    const serviceItem = document.createElement('div');
+                    serviceItem.className = 'service-item';
+                    serviceItem.innerHTML = `
+                        <input type="checkbox" id="service-${service.id}" data-id="${service.id}" data-price="${service.price}">
+                        <label for="service-${service.id}">${service.name} - Rp ${parseFloat(service.price).toLocaleString('id-ID')}</label>
+                    `;
+                    servicesListDiv.appendChild(serviceItem);
+                });
+            } catch (error) {
+                calculateMessageDiv.className = 'message error';
+                calculateMessageDiv.textContent = `Gagal memuat layanan: ${error.message}`;
+                console.error('Error fetching services for user:', error);
+            }
+        }
+
+        document.getElementById('calculateTotalBtn').addEventListener('click', async () => {
+            const selectedServiceIds = Array.from(document.querySelectorAll('#servicesList input[type="checkbox"]:checked'))
+                                            .map(checkbox => parseInt(checkbox.dataset.id));
+            if (selectedServiceIds.length === 0) {
+                calculateMessageDiv.className = 'message error';
+                calculateMessageDiv.textContent = 'Pilih setidaknya satu layanan untuk menghitung total.';
+                displayedTotalPriceSpan.textContent = 'Rp 0.00';
+                return;
+            }
+
+            try {
+                const result = await callApi(`${API_BASE_URL}/user/calculate-total`, 'POST', selectedServiceIds);
+
+                displayedTotalPriceSpan.textContent = `Rp ${parseFloat(result.totalPrice).toLocaleString('id-ID')}`;
+                calculateMessageDiv.className = 'message success';
+                calculateMessageDiv.textContent = result.message; 
+
+            } catch (error) {
+                calculateMessageDiv.className = 'message error';
+                calculateMessageDiv.textContent = `Gagal menghitung total: ${error.message}`;
+                console.error('Error calculating total:', error);
+            }
+        });
+
+        // --- Membuat Booking ---
+        bookingForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const selectedServiceIds = Array.from(document.querySelectorAll('#servicesList input[type="checkbox"]:checked'))
+                                            .map(checkbox => parseInt(checkbox.dataset.id));
+            const bookingDateTimeInput = document.getElementById('bookingDateTime');
+            const bookingTimeValue = bookingDateTimeInput.value; // Format: YYYY-MM-DDTHH:MM (dari datetime-local)
+
+            if (selectedServiceIds.length === 0) {
+                bookingMessageDiv.className = 'message error';
+                bookingMessageDiv.textContent = 'Pilih setidaknya satu layanan untuk membuat booking.';
+                return;
+            }
+            if (!bookingTimeValue) {
+                bookingMessageDiv.className = 'message error';
+                bookingMessageDiv.textContent = 'Pilih tanggal dan waktu booking.';
+                return;
+            }
+
+            // Pastikan format waktu sesuai ISO 8601 (YYYY-MM-DDTHH:MM:SS)
+            // Tambahkan detik ":00" ke string datetime-local
+            const bookingTimeISO = bookingTimeValue + ':00'; 
+
+            const bookingData = {
+                serviceIds: selectedServiceIds,
+                bookingTime: bookingTimeISO
+            };
+
+            try {
+                const result = await callApi(`${API_BASE_URL}/user/bookings`, 'POST', bookingData);
+                bookingMessageDiv.className = 'message success';
+                bookingMessageDiv.textContent = result.message;
+                bookingForm.reset();
+                displayedTotalPriceSpan.textContent = 'Rp 0.00'; // Reset total price after booking
+                fetchMyBookings(); // Muat ulang booking pengguna setelah booking baru
+            } catch (error) {
+                bookingMessageDiv.className = 'message error';
+                bookingMessageDiv.textContent = `Gagal membuat booking: ${error.message}`;
+                console.error('Error creating booking:', error);
+            }
+        });
+
+        // --- Melihat Booking Saya ---
+        async function fetchMyBookings() {
+            try {
+                const bookings = await callApi(`${API_BASE_URL}/user/bookings`);
+                myBookingsTableBody.innerHTML = '';
+                if (bookings.length === 0) {
+                    myBookingMessageDiv.className = 'message';
+                    myBookingMessageDiv.textContent = 'Anda belum memiliki booking.';
+                    return;
+                }
+                myBookingMessageDiv.textContent = ''; // Clear message
+                bookings.forEach(booking => {
+                    const row = myBookingsTableBody.insertRow();
+                    row.insertCell().textContent = booking.id;
+                    row.insertCell().textContent = new Date(booking.bookingTime).toLocaleString('id-ID');
+                    row.insertCell().textContent = booking.services.map(s => s.name).join(', ');
+                    row.insertCell().textContent = `Rp ${parseFloat(booking.totalPrice).toLocaleString('id-ID')}`;
+                    row.insertCell().textContent = booking.status;
+                });
+            } catch (error) {
+                myBookingMessageDiv.className = 'message error';
+                myBookingMessageDiv.textContent = `Gagal memuat booking Anda: ${error.message}`;
+                console.error('Error fetching user bookings:', error);
+            }
+        }
+
+        // --- Navigasi dan Logout ---
+        document.getElementById('showServices').addEventListener('click', () => {
+            servicesSection.style.display = 'block';
+            myBookingsSection.style.display = 'none';
+            fetchAndDisplayServices(); // Muat ulang layanan saat ditampilkan
+        });
+
+        document.getElementById('showMyBookings').addEventListener('click', () => {
+            servicesSection.style.display = 'none';
+            myBookingsSection.style.display = 'block';
+            fetchMyBookings(); // Muat ulang booking pengguna saat ditampilkan
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('jwtToken');
+            localStorage.removeItem('userRoles');
+            window.location.href = 'login.html';
+        });
+
+        // Muat layanan saat halaman pertama kali dimuat
+        fetchAndDisplayServices();
+    </script>
+</body>
+</html>
